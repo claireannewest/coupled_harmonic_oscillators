@@ -1,9 +1,5 @@
-# tight_binding
+## Tight binding code
 
-The local folder lives in ~/werk/research/git/tight_binding 
+To see an explanation on how the physics work: https://www.overleaf.com/read/gbqmdxsggspw
 
-To update changes, 
 
-git add .
-git commit -m "whatever"
-git push -u origin master
