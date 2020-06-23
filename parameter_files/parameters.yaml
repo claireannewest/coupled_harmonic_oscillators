@@ -1,6 +1,6 @@
 precision: 15
 
-inputs: 'parameter_files/inputs.txt'
+inputs: 'parameter_files/inputs_copy.txt'
 
 n_b: 1.
 
