@@ -1,6 +1,6 @@
-Center [cm]	Dipole direction	Radii [cm]
--20.E-7 0.E-7	1.0    0.0		20.E-7
-20.E-7 0.E-7	1.0    0.0		30.E-7
--20.E-7 0.E-7	0.0    1.0		20.E-7
-20.E-7 0.E-7    0.0    1.0		30.E-7
+Center [cm]	Dipole direction	Radii [cm]	Kind
+-40.E-7 0.E-7	1.0    0.0		20.E-7		2
+40.E-7 0.E-7	1.0    0.0		30.E-7		2
+-40.E-7 0.E-7	0.0    1.0		140.E-7		1
+40.E-7 0.E-7    0.0    1.0		140.E-7		1
 

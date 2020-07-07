@@ -11,37 +11,72 @@ e = 4.80326E-10 # elementary charge, [statC]
 prec = 10 # convergence condition for iteration
 
 class CoupledOscillators:
-    def __init__(self, num_part, dim, centers, orientations, radii): 
+    def __init__(self, num_part, num_dip, centers, orientations, radii, kind): 
         """Defines the different system parameters.
         
         Keyword arguments:
         num_part -- number of particles 
-        dim -- dimensions of system (1D or 2D). One osc. per particle per dimension
+        num_dip -- number of dipoles per particle (normally two)
         centers -- particle centers [cm]
         orientaitons -- unit vectors defining each dipole [unitless]
         radii -- radii of the prolate spheriod oscillators
+        kind -- which kind of dipole (0 = sphere, 1 = long axis prolate spheroid, 2 = short axis prolate spheroid)
         """
         self.num_part = num_part
-        self.dim = dim 
+        self.num_dip = num_dip 
         self.radii = radii
         self.centers = centers 
         self.unit_vecs = orientations
+        self.kind = kind
         self.w0, self.m, self.gamNR = self.dipole_parameters()
-        self.mat_size = int(self.dim*self.num_part)
+        self.mat_size = int(self.num_dip*self.num_part)
             
     def dipole_parameters(self):
-        """Sets the physical dipole parameters. This is assuming the dipoles represent spheres.
+        """Sets the physical dipole parameters. This is assuming the dipoles represent spheres or prolate spheroids.
         """
+        w0 = np.zeros(self.num_dip*self.num_part) # initiaize array for resonance frequency for each dipole
+        m = np.zeros(self.num_dip*self.num_part) # initiaize array for effective for each dipole
+        gamNR = np.zeros(self.num_dip*self.num_part) # initiaize array for nonradiative damping for each dipole
         wp = 9. # bulk plasma frequency [eV]
         eps_inf= 9. # static dielectric response of ionic background [unitless]
         w0_qs = np.sqrt(wp**2/((eps_inf-1)+3)) # quasi-static plasmon resonance frequency [eV]
-        v = 4/3*np.pi*(self.radii)**3 # volume of sphere
-        m_qs = 4*np.pi*e**2*((9. - 1)+3)/(9*(w0_qs/hbar_eVs)**2*v) # quasi-staticc mass of sphere
-        # Long wavelength approximation (https://www.osapublishing.org/josab/viewmedia.cfm?uri=josab-26-3-517&seq=0)
-        m =  m_qs + e**2/(self.radii*c**2) # mass with radiation damping
-        w0 = w0_qs*np.sqrt(m_qs/m) # plasmon resonance frequency with radiation damping
-        gamNR = 0.07 * m_qs/m # adjusted nonradiative damping 
+        for row in range(0,self.num_dip*self.num_part):
+            if self.kind[row] == 0: # sphere
+                v = 4/3*np.pi*(self.radii[row])**3 # volume of sphere
+                m_qs = 4*np.pi*e**2*((9. - 1)+3)/(9*(w0_qs/hbar_eVs)**2*v) # quasi-staticc mass of sphere
+                # Long wavelength approximation (https://www.osapublishing.org/josab/viewmedia.cfm?uri=josab-26-3-517&seq=0)
+                m[row] =  m_qs + e**2/(self.radii[row]*c**2) # mass with radiation damping
+                w0[row] = w0_qs*np.sqrt(m_qs/m[row]) # plasmon resonance frequency with radiation damping
+                gamNR[row] = 0.07 * m_qs/m[row] # adjusted nonradiative damping 
+            
+            if self.kind[row] == 1: # prolate spheroid
+                cs = self.radii[row] # semi-major axis of prolate sphereiod 
+                # find which row corresponds to the semi-minor axis of prolate spheroid (this is required to calculate dipole parameters)
+                idx = np.where( (self.centers[:,0] == self.centers[row,0]) &  # the semi-minor axis will have the same origin
+                        (self.centers[:,1] == self.centers[row,1]) & # the semi-minor axis will have the same origin
+                        (self.kind == 2) # the semi-minor axis will have kind = 2
+                        )
+                a = self.radii[idx] #semi-minor axis of prolate spheriod 
+                es = (cs**2 - a**2)/cs**2
+                Lz = (1-es**2)/es**3*(-es+1./2*np.log((1+es)/(1-es)))
+                Ly = (1-Lz)/2   
+                D = 3./4*((1+es**2)/(1-es**2)*Lz + 1)
+                V = 4./3*np.pi*a**2*cs
+                # for semi-major axis
+                li = cs; Li = Lz
+                m_qs= 4*np.pi*e**2*((eps_inf-1)+1/Li)/((w0_qs/hbar_eVs)**2*V/Li**2) # g 
+                m[row] = m_qs + D*e**2/(li*c**2) # g (charge and speed of light)
+                w0[row] = (w0_qs)*np.sqrt(m_qs/m[row]) # 1/s
+                gamNR[row] = 0.07*(m_qs/m[row]) 
+                # for semi-minor axis 
+                li = a
+                Li = Ly
+                m_qs= 4*np.pi*e**2*((eps_inf-1)+1/Li)/((w0_qs/hbar_eVs)**2*V/Li**2) # g 
+                m[idx] = m_qs + D*e**2/(li*c**2) # g (charge and speed of light)
+                w0[idx] = (w0_qs)*np.sqrt(m_qs/m[idx]) # 1/s
+                gamNR[idx] = 0.07*(m_qs/m[idx]) 
         return w0, m, gamNR
+
     
     def coupling(self, dip_i, dip_j, k): 
         """Calculates the off diagonal matrix elements, which is the 
@@ -110,6 +145,7 @@ class CoupledOscillators:
                     denom = ( eigval_hist[2] - eigval_hist[1] ) - ( eigval_hist[1] - eigval_hist[0] )
                     w_guess = eigval_hist[2] - ( eigval_hist[2] - eigval_hist[1] )**2 / denom 
                 k = w_guess/hbar_eVs*np.sqrt(eps_b)/c
+
                 val, vec, H = self.make_matrix(k=k)
                 amp = np.sqrt(np.abs(val))
                 phi = np.arctan2(np.imag(val), np.real(val))
@@ -158,14 +194,16 @@ class CoupledOscillators:
             plt.yticks([]); plt.xticks([])
 
 data = np.loadtxt('inputs.txt',skiprows=1)
+
 rod_heterodimer_fromfile = CoupledOscillators(
         2, # num particles
-        2, # num dimensions 
+        2, # number of dipoles per particle 
         data[:,0:2], # particle centers [particle 1, particle 2, ...]
         data[:,2:4], # unit vectors defining the orientation of each dipole
-        data[:,4], #radii or semi-axis corresponding to that dipole (if sphere, set the radii equal)
+        data[:,4], # radii or semi-axis corresponding to that dipole 
+        data[:,5], # kind of particle (currently only takes prolate spherioids and spheres)
         )
 
 
-rod_heterodimer_fromfile.see_vectors()
+print(rod_heterodimer_fromfile.see_vectors())
 plt.show()
