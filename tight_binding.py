@@ -19,7 +19,7 @@ class CoupledOscillators:
         dim -- dimensions of system (1D or 2D). One osc. per particle per dimension
         centers -- particle centers [cm]
         orientaitons -- unit vectors defining each dipole [unitless]
-        radii -- radii of the sphere oscillators
+        radii -- radii of the prolate spheriod oscillators
         """
         self.num_part = num_part
         self.dim = dim 
@@ -163,7 +163,7 @@ rod_heterodimer_fromfile = CoupledOscillators(
         2, # num dimensions 
         data[:,0:2], # particle centers [particle 1, particle 2, ...]
         data[:,2:4], # unit vectors defining the orientation of each dipole
-        np.array([20E-7, 30E-7, 20E-7, 30E-7]), #radii (if isotropic, [r1, r2, r1, r2])
+        data[:,4], #radii or semi-axis corresponding to that dipole (if sphere, set the radii equal)
         )
 
 
