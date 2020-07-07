@@ -27,7 +27,7 @@ def ext_cross():
 	return 4.*np.pi*w/c*np.imag(alpha())
 
 def gammaEELS(
-    ebeam_loc=np.array([-46*2*1E-7,0]),
+    ebeam_loc,
     ):     
     v = 0.48 
     gamL = 1/np.sqrt(1-v**2)
@@ -35,23 +35,23 @@ def gammaEELS(
     magR = np.linalg.norm(ebeam_loc-rod_loc)
     constants = 4.0*e**2/((hbar_eVs)*hbar_cgs*np.pi*(v*c)**4*gamL**2)*(w/hbar_eVs)**2*(kn(1,(w/hbar_eVs)*magR/(v*c*gamL)))**2
     Gam_EELS = constants*np.imag(alpha())
-    return Gam_EELS 
+    return Gam_EELS
 
-idx = np.where(abs_cross() == max(abs_cross())); wave_abs = w[idx]
-print('Absorption', wave_abs[0])
+# idx = np.where(abs_cross() == max(abs_cross())); wave_abs = w[idx]
+# print('Absorption', wave_abs[0])
 
-idx = np.where(scat_cross() == max(scat_cross())); wave_scat = w[idx]
-print('Scattering', wave_scat[0])
+# idx = np.where(scat_cross() == max(scat_cross())); wave_scat = w[idx]
+# print('Scattering', wave_scat[0])
 
-idx = np.where(ext_cross() == max(ext_cross())); wave_ext = w[idx]
-print('Extinction', wave_ext[0])
+# idx = np.where(ext_cross() == max(ext_cross())); wave_ext = w[idx]
+# print('Extinction', wave_ext[0])
 
-idx = np.where(gammaEELS() == max(gammaEELS())); wave_eel = w[idx]
-print('Gamma eel', wave_eel[0])
+# idx = np.where(gammaEELS() == max(gammaEELS())); wave_eel = w[idx]
+# print('Gamma eel', wave_eel[0])
 
-plt.plot(w, abs_cross()/max(abs_cross()), label='abs')
-plt.plot(w, scat_cross()/max(scat_cross()), label='scat')
-plt.plot(w, ext_cross()/max(ext_cross()), label='ext')
-plt.plot(w, gammaEELS()/max(gammaEELS()), label='eel')
+# plt.plot(w, abs_cross()/max(abs_cross()), label='abs')
+# plt.plot(w, scat_cross()/max(scat_cross()), label='scat')
+# plt.plot(w, ext_cross()/max(ext_cross()), label='ext')
+plt.plot(w, gammaEELS(np.array([-46*2*1E-7,0])), label='eel')
 plt.legend()
-#plt.show()
+plt.show()

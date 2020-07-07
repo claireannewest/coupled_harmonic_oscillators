@@ -11,33 +11,23 @@ e = 4.80326E-10 # elementary charge, [statC]
 prec = 10 # convergence condition for iteration
 
 class CoupledOscillators:
-    def __init__(self, num_part, dim, radii, centers): 
+    def __init__(self, num_part, dim, centers, orientations, radii): 
         """Defines the different system parameters.
         
         Keyword arguments:
         num_part -- number of particles 
         dim -- dimensions of system (1D or 2D). One osc. per particle per dimension
-        radii -- radii of the sphere oscillators
         centers -- particle centers [cm]
+        orientaitons -- unit vectors defining each dipole [unitless]
+        radii -- radii of the sphere oscillators
         """
         self.num_part = num_part
         self.dim = dim 
         self.radii = radii
         self.centers = centers 
-        self.unit_vecs, self.all_centers = self.dipole_orientations()
+        self.unit_vecs = orientations
         self.w0, self.m, self.gamNR = self.dipole_parameters()
         self.mat_size = int(self.dim*self.num_part)
-
-    def dipole_orientations(self):
-        """Defines the orientations of each dipole. This function will need to be rewritten
-        for a system of nanorods at angles.  
-        """
-        x_dir = [1,0]
-        x_hats = np.tile(x_dir, (self.num_part, 1)) # duplicates x_dir num_part times
-        y_dir = [0,1]
-        y_hats = np.tile(y_dir, (self.num_part, 1)) 
-        all_centers = np.tile(self.centers, (self.num_part,1))
-        return np.concatenate((x_hats, y_hats)), all_centers
             
     def dipole_parameters(self):
         """Sets the physical dipole parameters. This is assuming the dipoles represent spheres.
@@ -64,7 +54,7 @@ class CoupledOscillators:
         k -- wave vector [cm]
         """
         k = np.real(k) 
-        r_ij = self.all_centers[dip_i,:] - self.all_centers[dip_j,:] # distance between ith and jth dipole 
+        r_ij = self.centers[dip_i,:] - self.centers[dip_j,:] # distance between ith and jth dipole 
         mag_rij = np.linalg.norm(r_ij) 
         if mag_rij == 0: 
         #I f i and j are at the same location, the coupling (g) is zero (prevents a divide by zero error.)
@@ -139,8 +129,8 @@ class CoupledOscillators:
     def see_vectors(self):
         """Plot the convereged eigenvectors."""
         final_eigvals, final_eigvecs = self.iterate()
-        dip_ycoords = self.all_centers[:,0]
-        dip_zcoords = self.all_centers[:,1]  
+        dip_ycoords = self.centers[:,0]
+        dip_zcoords = self.centers[:,1]  
         plt.figure(1, figsize=[13,5])
         for mode in range(0,self.mat_size):
             w = final_eigvals[mode]
@@ -167,17 +157,15 @@ class CoupledOscillators:
             plt.ylim([zmin, zmax])
             plt.yticks([]); plt.xticks([])
 
-rod_heterodimer = CoupledOscillators(
+data = np.loadtxt('inputs.txt',skiprows=1)
+rod_heterodimer_fromfile = CoupledOscillators(
         2, # num particles
         2, # num dimensions 
+        data[:,0:2], # particle centers [particle 1, particle 2, ...]
+        data[:,2:4], # unit vectors defining the orientation of each dipole
         np.array([20E-7, 30E-7, 20E-7, 30E-7]), #radii (if isotropic, [r1, r2, r1, r2])
-        np.array([[-20E-7, 0], [20E-7, 0]]), # particle centers [particle 1, particle 2, ...]
         )
 
-single_rhombus = CoupledOscillators(
-        4, # num particles
-        2, # num dimensions 
-        np.array([75.E-7, 75.E-7, 87.E-7, 87.E-7, 122.E-7,122.E-7,70.E-7, 70.E-7]), #radii (if isotropic, [r1, r2, r1, r2])
-        np.array([[0, 103.E-7], [0, -103.E-7], [-49.5E-7, 0], [49.5E-7, 0]]), # particle centers
-        )
-rod_heterodimer.see_vectors()
+
+rod_heterodimer_fromfile.see_vectors()
+plt.show()
