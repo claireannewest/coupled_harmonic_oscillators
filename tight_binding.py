@@ -1,7 +1,8 @@
 import numpy as np
 import matplotlib.pyplot as plt
 import yaml
-from scipy import optimize
+from scipy.linalg import null_space
+from sympy import *
 
 eps_b = 1.0 # dielectric constant of background, (eps_b = 1.0 is vacuum) [unitless]
 c = 2.998E+10 # speed of light [cm/s]
@@ -119,7 +120,7 @@ class CoupledOscillators:
             for dip_j in range(0, self.mat_size): 
                     if dip_i != dip_j:
                         matrix[ dip_i, dip_j] = self.coupling(dip_i=dip_i, dip_j=dip_j, k=k) # off-diagonal matrix elements
-            eigval, eigvec = np.linalg.eig(matrix)
+        eigval, eigvec = np.linalg.eig(matrix)
         return eigval, eigvec, matrix
 
     def iterate(self):
@@ -177,11 +178,11 @@ class CoupledOscillators:
             plt.title('%.2f' % (np.real(w)) + ' + i%.2f eV' % (np.imag(w)), fontsize=10)
             plt.scatter(dip_ycoords, dip_zcoords,c='blue',s=10)
             p = v[...,np.newaxis]*self.unit_vecs
-            p_perpart = p[:int(self.mat_size/2),:] + p[int(self.mat_size/2):,:] 
-
-            ymin = min(dip_ycoords)-50E-7; ymax = max(dip_ycoords)+50E-7
-            zmin = min(dip_zcoords)-50E-7; zmax = max(dip_zcoords)+50E-7
-            plt.quiver(dip_ycoords[:int(self.mat_size/2)], dip_zcoords[:int(self.mat_size/2)], p_perpart[:,0], p_perpart[:,1], pivot='mid', 
+            if self.num_dip == 1: p_perpart = p
+            else: p_perpart = p[:int(self.mat_size/self.num_dip),:] + p[int(self.mat_size/self.num_dip):,:] 
+            ymin = min(dip_ycoords)-150E-7; ymax = max(dip_ycoords)+150E-7
+            zmin = min(dip_zcoords)-150E-7; zmax = max(dip_zcoords)+150E-7
+            plt.quiver(dip_ycoords[:int(self.mat_size/self.num_dip)], dip_zcoords[:int(self.mat_size/self.num_dip)], p_perpart[:,0], p_perpart[:,1], pivot='mid', 
                 width=.5, #shaft width in arrow units 
                 scale=1., 
                 headlength=5,
@@ -193,17 +194,98 @@ class CoupledOscillators:
             plt.ylim([zmin, zmax])
             plt.yticks([]); plt.xticks([])
 
-data = np.loadtxt('inputs.txt',skiprows=1)
+    def make_particular(self,w):
+        """Forms the matrix A for A*x = 0. 
+        
+        Keywords: 
+        w -- energy [eV]
+        """
+        A = np.zeros( (self.mat_size, self.mat_size) ,dtype=complex) 
+        k = w/hbar_eVs*np.sqrt(eps_b)/c
 
+        gam = self.gamNR + (w)**2*(2.0*e**2)/(3.0*self.m*c**3)/hbar_eVs # radiative damping for dipole i
+        A[( np.arange(self.mat_size), np.arange(self.mat_size) )] = -w**2 + self.w0**2 - 1j*gam*w # on-diagonal matrix elements
+        for dip_i in range(0 , self.mat_size): 
+            for dip_j in range(0, self.mat_size): 
+                    if dip_i != dip_j:
+                        A[ dip_i, dip_j] = self.coupling(dip_i=dip_i, dip_j=dip_j, k=k) # off-diagonal matrix elements
+        # eigval, eigvec = np.linalg.eig(A)
+
+        F = np.array([1,0])
+        vectors = np.matmul(np.linalg.inv(A), F)
+        # print(vectors)
+        # print(np.linalg.eig(A))
+
+    def analytic(self,w):
+        """Forms the matrix A for A*x = 0. 
+        
+        Keywords: 
+        w -- energy [eV]
+        """
+
+        E = 1
+        dip_i = 0; dip_j = 1
+        k = w/hbar_eVs*np.sqrt(eps_b)/c
+        w0, m, gamNR = self.dipole_parameters()
+        m1 = m[0]; m2 = m[1]; w01 = w0[0]; w02 = w0[1]
+        g = self.coupling(dip_i=dip_i, dip_j=dip_j, k=k) # off-diagonal matrix elements
+        gam = self.gamNR + (w)**2*(2.0*e**2)/(3.0*self.m*c**3)/hbar_eVs # radiative damping for dipole i
+
+        Omega1 = -w**2 - 1j*w*gam[0] + w01**2
+        Omega2 = -w**2 - 1j*w*gam[1] + w02**2
+        alph1 = np.real(Omega1); alph2 = np.real(Omega2)
+        beta1 = np.imag(Omega1); beta2 = np.imag(Omega2)
+
+        E0=1
+
+        a1 = g*m1*m2*(alph1*alph2 - beta1*beta2) - g**3 + m1*m2**2*alph1*(alph1**2 + alph2**2) - g**2*m2*alph2
+        b1 = g*m1*m2*(alph2*beta1 + alph1*beta2) + m1*m2**2*beta1*(alph1**2+alph2**2)+g**2*m2*beta2
+        P1 = 1./2*m1*gam[0]*(e*E0)**2*w**2/(np.abs(m1*m2*Omega1*Omega2 - g**2)**4)*(a1**2+b1**2)
+
+        a2 = g*m1*m2*(alph1*alph2 - beta1*beta2) - g**3 + m2*m1**2*alph2*(alph1**2 + alph2**2) - g**2*m1*alph1
+        b2 = g*m1*m2*(alph2*beta1 + alph1*beta2) + m2*m1**2*beta2*(alph1**2+alph2**2)+g**2*m1*beta1
+        P2 = 1./2*m2*gam[1]*(e*E0)**2*w**2/(np.abs(m1*m2*Omega1*Omega2 - g**2)**4)*(a2**2+b2**2)
+        return P1, P2
+
+    def plot_analytic(self):
+        w = np.arange(2,3,.005)
+        P1 = np.zeros(len(w))
+        P2 = np.zeros(len(w))
+
+        for i in range(0,len(w)):
+            P1[i], P2[i] = rod_heterodimer_fromfile.analytic(w=w[i])
+
+        # plt.plot(w,P1, label='part 1')
+        # plt.plot(w,P2, label='part 2')
+        # plt.plot(w, P1+P2, label='total')
+        # plt.legend()
+        # plt.plot(w,x2,'--')
+
+        # plt.show()
+
+
+data = np.loadtxt('inputs_1Ddimer.txt',skiprows=1)
 rod_heterodimer_fromfile = CoupledOscillators(
         2, # num particles
-        2, # number of dipoles per particle 
+        1, # number of dipoles per particle 
         data[:,0:2], # particle centers [particle 1, particle 2, ...]
         data[:,2:4], # unit vectors defining the orientation of each dipole
         data[:,4], # radii or semi-axis corresponding to that dipole 
         data[:,5], # kind of particle (currently only takes prolate spherioids and spheres)
         )
 
+data_triangle = np.loadtxt('inputs_triangle.txt',skiprows=1)
+triangle = CoupledOscillators(
+        3, # num particles
+        1, # number of dipoles per particle 
+        data_triangle[:,0:2], # particle centers [particle 1, particle 2, ...]
+        data_triangle[:,2:4], # unit vectors defining the orientation of each dipole
+        data_triangle[:,4], # radii or semi-axis corresponding to that dipole 
+        data_triangle[:,5], # kind of particle (currently only takes prolate spherioids and spheres)
+        )
 
-print(rod_heterodimer_fromfile.see_vectors())
+
+# rod_heterodimer_fromfile.see_vectors()
+triangle.see_vectors()
+
 plt.show()
