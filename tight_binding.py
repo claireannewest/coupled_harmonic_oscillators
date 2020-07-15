@@ -59,9 +59,9 @@ class CoupledOscillators:
                         (self.centers[:,1] == self.centers[row,1]) & # the semi-minor axis will have the same origin
                         (self.kind == 2) # the semi-minor axis will have kind = 2
                         )
-                if optional_semiaxis == '': 
+                if self.optional_semiaxis == '': 
                     a = self.radii[idx] # [cm], semi-minor axis of prolate spheriod 
-                if optional_semiaxis != '': 
+                if self.optional_semiaxis != '': 
                     a = self.optional_semiaxis # [cm], semi-minor axis of prolate spheriod 
                 es = (cs**2 - a**2)/cs**2 # [unitless]
                 Lz = (1-es**2)/es**3*(-es+1./2*np.log((1+es)/(1-es))) # [unitless]
@@ -75,7 +75,7 @@ class CoupledOscillators:
                 w0[row] = (w0_qs)*np.sqrt(m_qs/m[row]) # [eV]
                 gamNR[row] = 0.07*(m_qs/m[row]) # [eV]
                 # for semi-minor axis 
-                if optional_semiaxis != '':
+                if self.optional_semiaxis != '':
                     li = a
                     Li = Ly
                     m_qs= 4*np.pi*e**2*((eps_inf-1)+1/Li)/((w0_qs/hbar_eVs)**2*V/Li**2) # g 
@@ -196,28 +196,7 @@ class CoupledOscillators:
             plt.ylim([zmin, zmax])
             plt.axis('equal')
             plt.yticks([]); plt.xticks([])
-            plt.scatter(dip_ycoords, dip_zcoords,c='blue',s=10)
-
-    def make_particular(self,w):
-        """Forms the matrix A for A*x = 0. 
-        
-        Keywords: 
-        w -- energy [eV]
-        """
-        A = np.zeros( (self.mat_size, self.mat_size) ,dtype=complex) 
-        k = w/hbar_eVs*np.sqrt(eps_b)/c
-
-        gam = self.gamNR + (w)**2*(2.0*e**2)/(3.0*self.m*c**3)/hbar_eVs # radiative damping for dipole i
-        A[( np.arange(self.mat_size), np.arange(self.mat_size) )] = -w**2 + self.w0**2 - 1j*gam*w # on-diagonal matrix elements
-        for dip_i in range(0 , self.mat_size): 
-            for dip_j in range(0, self.mat_size): 
-                    if dip_i != dip_j:
-                        A[ dip_i, dip_j] = self.coupling(dip_i=dip_i, dip_j=dip_j, k=k) # off-diagonal matrix elements
-        # eigval, eigvec = np.linalg.eig(A)
-        F = np.array([1,0])
-        vectors = np.matmul(np.linalg.inv(A), F)
-        # print(vectors)
-        # print(np.linalg.eig(A))
+            plt.scatter(dip_ycoords, dip_zcoords,c='blue',s=20)
 
     def analytic_twooscill(self,w):
         """Solves for the power absorbed by two coupled oscillators (q.s.) 
@@ -242,30 +221,74 @@ class CoupledOscillators:
 
         a1 = g*m1*m2*(alph1*alph2 - beta1*beta2) + m1*m2**2*alph1*(alph2**2 + beta2**2) - g**2*m2*alph2 - g**3 # [g^3 eV^6]
         b1 = g*m1*m2*(alph2*beta1 + alph1*beta2) + m1*m2**2*beta1*(alph2**2 + beta2**2) + g**2*m2*beta2 # [g^3 eV^6]
-        P1 = 1./2*m1*gam[0]*(e*E0)**2*w**2/(np.abs(m1*m2*Omega1*Omega2 - g**2)**4)*(a1**2 + b1**2)*hbar_eVs # [g cm^2 s^-3]
+        P1 = 1./2*m1*self.gamNR[0]*(e*E0)**2*w**2/(np.abs(m1*m2*Omega1*Omega2 - g**2)**4)*(a1**2 + b1**2)*hbar_eVs # [g cm^2 s^-3]
 
         a2 = g*m1*m2*(alph1*alph2 - beta1*beta2) + m2*m1**2*alph2*(alph1**2 + beta1**2) - g**2*m1*alph1 - g**3 # [g^3 eV^6]
         b2 = g*m1*m2*(alph2*beta1 + alph1*beta2) + m2*m1**2*beta2*(alph1**2 + beta1**2) + g**2*m1*beta1 # [g^3 eV^6]
-        P2 = 1./2*m2*gam[1]*(e*E0)**2*w**2/(np.abs(m1*m2*Omega1*Omega2 - g**2)**4)*(a2**2 + b2**2)*hbar_eVs # [g cm^2 s^-3]
+        P2 = 1./2*m2*self.gamNR[1]*(e*E0)**2*w**2/(np.abs(m1*m2*Omega1*Omega2 - g**2)**4)*(a2**2 + b2**2)*hbar_eVs # [g cm^2 s^-3]
         return P1, P2
 
     def plot_analytic_twooscill(self):
-        w = np.arange(2,3,.005)
+        w = np.arange(1,4,.005)
         P1 = np.zeros(len(w))
         P2 = np.zeros(len(w))
 
         for i in range(0,len(w)):
             P1[i], P2[i] = rod_heterodimer_fromfile.analytic_twooscill(w=w[i])
 
-        plt.plot(w,P1, label='part 1')
-        plt.plot(w,P2, label='part 2')
-        plt.plot(w, P1+P2, label='total')
+        plt.plot(w,P1/max(P1), label='part 1, analytic')
+        plt.plot(w,P2/max(P1), label='part 2, analytic')
+        # plt.plot(w, (P1+P2), label='total, analytic')
         plt.legend()
 
-        plt.show()
+    def numeric_twooscill(self, w):
+        """Solves for the power absorbed by two coupled oscillators (q.s.) 
+        
+        Keywords: 
+        w -- energy [eV]
+        """
+        dip_i = 0; dip_j = 1
+        k = w/hbar_eVs*np.sqrt(eps_b)/c
+        w0, m, gamNR = self.dipole_parameters()
+        m1 = m[0]; m2 = m[1]; 
+        w01 = w0[0]; w02 = w0[1]
+        g = self.coupling(dip_i=dip_i, dip_j=dip_j, k=k) # off-diagonal matrix elements
+        gam = self.gamNR + (w)**2*(2.0*e**2)/(3.0*self.m*c**3)/hbar_eVs # radiative damping for dipole i
 
+        Z1 = -w**2 - 1j*w*gam[0] + w01**2
+        Z2 = -w**2 - 1j*w*gam[1] + w02**2
 
-data = np.loadtxt('inputs_1Ddimer.txt',skiprows=1)
+        K = e**2/m
+
+        M = np.array([[Z1, -g/m1], [-g/m2, Z2]])
+        alpha = np.matmul(np.linalg.inv(M), K)
+        alpha1 = alpha[0]; alpha2 = alpha[1]
+        # Pow1 = 4*np.pi*w**2/(e**2*c)*m1*self.gamNR[0]*np.abs(alpha1)**2
+        # Pow2 = 4*np.pi*w**2/(e**2*c)*m2*self.gamNR[1]*np.abs(alpha2)**2
+
+        I0 = 10**12 # [erg s^-1 cm^-2] 10^9 W/m^2
+        E0 = np.sqrt(I0*8*np.pi/c*np.sqrt(eps_b)) # [g^1/2 s^-1 cm^-1/2]
+        # Pow1 = 1/2*np.pi*w**2*E0**2/e**2*m[0]*self.gamNR[0]*np.abs(alpha[0])**2
+        # Pow2 = 1/2*np.pi*w**2*E0**2/e**2*m[1]*self.gamNR[1]*np.abs(alpha[1])**2
+        Pow = 1/2*np.pi*w**2*E0**2/e**2*m*self.gamNR*np.abs(alpha)**2
+        Pow = np.reshape(Pow, (1,2))
+        print(Pow.shape)
+        return Pow#1, Pow2
+
+    def plot_numeric_twooscill(self):
+        w = np.arange(1,4,.005)
+        # P1 = np.zeros(len(w))
+        # P2 = np.zeros(len(w))
+        Pow = np.zeros((len(w),2))
+        for i in range(0,len(w)):
+            Pow[i,:] = rod_heterodimer_fromfile.numeric_twooscill(w=w[i])
+
+        plt.plot(w,Pow[:,0]/max(Pow[:,0]), label='part 1, numeric')
+        plt.plot(w,Pow[:,1]/max(Pow[:,1]), label='part 2, numeric')
+        # plt.plot(w, (P1+P2), '--',label='total, numeric')
+        plt.legend()
+
+data = np.loadtxt('database/inputs_rodhomodimer.txt',skiprows=1)
 rod_heterodimer_fromfile = CoupledOscillators(
         2, # num particles
         1, # number of dipoles per particle 
@@ -277,8 +300,15 @@ rod_heterodimer_fromfile = CoupledOscillators(
         )
 
 # rod_heterodimer_fromfile.plot_analytic_twooscill()
+# rod_heterodimer_fromfile.numeric_twooscill(w=1)
+# rod_heterodimer_fromfile.plot_numeric_twooscill()
 
-### Troubleshooting Oligomers ### 
+# plt.show()
+
+##################################################################
+################## Troubleshooting Oligomers ##################### 
+##################################################################
+
 # data_triangle = np.loadtxt('inputs_triangle.txt',skiprows=1)
 # triangle = CoupledOscillators(
 #         3, # num particles
@@ -289,7 +319,7 @@ rod_heterodimer_fromfile = CoupledOscillators(
 #         data_triangle[:,5], # kind of particle (currently only takes prolate spherioids and spheres)
 #         )
 
-data_pentamer = np.loadtxt('inputs_pentamer.txt',skiprows=1)
+data_pentamer = np.loadtxt('inputs_newpentamer.txt',skiprows=1)
 pentamer = CoupledOscillators(
         5, # num particles
         1, # number of dipoles per particle 
@@ -299,30 +329,30 @@ pentamer = CoupledOscillators(
         data_pentamer[:,5], # kind of particle (currently only takes prolate spherioids and spheres)
         37E-7, # semi-minor axis of prolate sphereoid (included here because it's not defined in data file)
         )
-pentamer.see_vectors()
-plt.show()
+# pentamer.see_vectors()
+# plt.show()
 
-# x = np.array([398, 247, -398, -266, 0])
-# y = np.array([324, 815, 324, 820, 0])
-# x = data_pentamer[:,0]*1E7
-# y = data_pentamer[:,1]*1E7
+x = data_pentamer[:,0]*1E7
+y = data_pentamer[:,1]*1E7
 
-# xcirc = np.array([x[0], x[1], x[2], x[3], x[4], x[0]])
-# ycirc = np.array([y[0], y[1], y[2], y[3], y[4],y[0]])
+xcirc = np.array([x[0], x[1], x[2], x[3], x[4], x[0]])
+ycirc = np.array([y[0], y[1], y[2], y[3], y[4],y[0]])
 
 # x_unitvec = data_pentamer[:,2]
 # y_unitvec = data_pentamer[:,3]
 
-# plt.plot(xcirc, ycirc)
-# # plt.scatter(x[4], y[4])
+plt.scatter(xcirc, ycirc)
+plt.scatter(x[0], y[0],color='k')
+plt.axis('equal')
+plt.show()
 
-# side1 = np.sqrt((x[0]-x[1])**2 + (y[0]-y[1])**2)
-# side2 = np.sqrt((x[1]-x[2])**2 + (y[1]-y[2])**2)
-# side3 = np.sqrt((x[2]-x[3])**2 + (y[2]-y[3])**2)
-# side4 = np.sqrt((x[3]-x[4])**2 + (y[3]-y[4])**2)
-# side5 = np.sqrt((x[4]-x[0])**2 + (y[4]-y[0])**2)
+side1 = np.sqrt((x[0]-x[1])**2 + (y[0]-y[1])**2)
+side2 = np.sqrt((x[1]-x[2])**2 + (y[1]-y[2])**2)
+side3 = np.sqrt((x[2]-x[3])**2 + (y[2]-y[3])**2)
+side4 = np.sqrt((x[3]-x[4])**2 + (y[3]-y[4])**2)
+side5 = np.sqrt((x[4]-x[0])**2 + (y[4]-y[0])**2)
 
-# print(side1, side2, side3, side4, side5)
+print(side1, side2, side3, side4, side5)
 # # print(np.arctan2(y_unitvec, x_unitvec)*180/np.pi)
 # # print(side1)
 # plt.axis('equal')
