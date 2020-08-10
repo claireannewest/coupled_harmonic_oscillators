@@ -1,3 +1,0 @@
-Center [cm]     Dipole direction  Radii [cm]  Kind	Drive
--35.E-7 0.E-7       1.0    0.0      20.E-7     0	1
-45.E-7 0.E-7        1.0    0.0      30.E-7     0	1
