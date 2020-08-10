@@ -5,7 +5,7 @@ op = bemoptions( 'sim', 'ret', 'waitbar', 0, 'interp', 'curv' );
 epstab = { epsconst( 1.0^2 ), epstable( 'drude.dat' ) };
 
 %  diameter of sphere
-diameter = 2*50;
+diameter = 2*10;
 %  initialize sphere
 p = comparticle( epstab, { trisphere( 144, diameter ) }, [ 2, 1 ], 1, op );
 
@@ -40,10 +40,10 @@ xlabel( 'Energy (eV)' );
 ylabel( 'Absorption cross section (nm^2)' );
 
 write_it = [1240./enei; ext_mcsqrd; abs_mcsqrd; sca_mcsqrd];
-% fileID = fopen('simulated_spectra/single_sphere/Spectrum_bemret_5nmsph144_drude_1.0','w');
-% fprintf(fileID,'%s %s %s %s \n', 'Energy [eV]', 'Ext Cross [um^2]', 'Abs Cross [um^2]', 'Sca Cross [um^2]');
-% fprintf(fileID,'%2.3f \t %2.5e \t %2.5e \t %2.5e \n',write_it);
-% fclose(fileID);
+fileID = fopen('simulated_spectra/single_sphere/Spectrum_bemret_10nmsph144_drude_1.0','w');
+fprintf(fileID,'%s %s %s %s \n', 'Energy [eV]', 'Ext Cross [um^2]', 'Abs Cross [um^2]', 'Sca Cross [um^2]');
+fprintf(fileID,'%2.3f \t %2.5e \t %2.5e \t %2.5e \n',write_it);
+fclose(fileID);
 
 
 %%  comparison with Mie theory

@@ -8,7 +8,6 @@ epstab = { epsconst( 1.^2 ), epstable( 'drude.dat' ) };
 radii1 = 5;
 radii2 = 5;
 gap = 100;
-cl
 
 % initialize spheres
 diameter1 = 2*radii1;
