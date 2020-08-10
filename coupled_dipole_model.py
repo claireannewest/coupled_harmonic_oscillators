@@ -9,7 +9,7 @@ fig = plt.figure(figsize=[4,4])
 
 n = 1.0
 xrad1 = 30.E-7; yrad1 = 30.E-7; zrad1 = 100.E-7
-# xrad2 = 20.E-7; yrad2 = 20.E-7; zrad2 = 50.E-7
+# xrad2 = 10.E-7; yrad2 = 10.E-7; zrad2 = 30.E-7
 
 
 # radii2 = 5E-7
@@ -68,7 +68,7 @@ center_1 = np.array([ [0], [0], [-zrad1-gap/2] ])
 centers = np.zeros((3*N, 1))
 all_radii = np.zeros((3*N, 1))
 
-centers[0:3,:] = center_1; #centers[3:6,:] = center_2
+# centers[0:3,:] = center_1; centers[3:6,:] = center_2
 
 all_radii[0,:] = xrad1; all_radii[1,:] = yrad1; all_radii[2,:] = zrad1;
 # all_radii[3,:] = xrad2; all_radii[4,:] = yrad2; all_radii[5,:] = zrad2;
@@ -149,21 +149,21 @@ def alpha0(w,radius,kind):
 def A_ij(dip_i, dip_j, k):
     ''' off diagonal block terms in A_tilde '''
     A_ij = np.zeros( (3, 3) ,dtype=complex) 
-    # r_ij = centers[3*dip_i:3*(dip_i+1),:] - centers[3*dip_j:3*(dip_j+1),:] # [cm], distance between ith and jth dipole 
-    # r = np.sqrt(r_ij[0]**2+r_ij[1]**2+r_ij[2]**2)
-    # rx = r_ij[0]; ry = r_ij[1]; rz = r_ij[2]
+    r_ij = centers[3*dip_i:3*(dip_i+1),:] - centers[3*dip_j:3*(dip_j+1),:] # [cm], distance between ith and jth dipole 
+    r = np.sqrt(r_ij[0]**2+r_ij[1]**2+r_ij[2]**2)
+    rx = r_ij[0]; ry = r_ij[1]; rz = r_ij[2]
 
-    # A_ij[0,0] = np.exp(1j*k*r)/r**3*(k**2*(rx*rx-r**2) + (1-1j*k*r)/r**2*(-3*rx*rx+r**2))
-    # A_ij[0,1] = np.exp(1j*k*r)/r**3*(k**2*(rx*ry) + (1-1j*k*r)/r**2*(-3*rx*ry))
-    # A_ij[0,2] = np.exp(1j*k*r)/r**3*(k**2*(rx*rz) + (1-1j*k*r)/r**2*(-3*rx*rz))
+    A_ij[0,0] = np.exp(1j*k*r)/r**3*(k**2*(rx*rx-r**2) + (1-1j*k*r)/r**2*(-3*rx*rx+r**2))
+    A_ij[0,1] = np.exp(1j*k*r)/r**3*(k**2*(rx*ry) + (1-1j*k*r)/r**2*(-3*rx*ry))
+    A_ij[0,2] = np.exp(1j*k*r)/r**3*(k**2*(rx*rz) + (1-1j*k*r)/r**2*(-3*rx*rz))
 
-    # A_ij[1,0] = A_ij[0,1]
-    # A_ij[1,1] = np.exp(1j*k*r)/r**3*(k**2*(ry*ry-r**2) + (1-1j*k*r)/r**2*(-3*ry*ry+r**2))
-    # A_ij[1,2] = np.exp(1j*k*r)/r**3*(k**2*(ry*rz) + (1-1j*k*r)/r**2*(-3*ry*rz))
+    A_ij[1,0] = A_ij[0,1]
+    A_ij[1,1] = np.exp(1j*k*r)/r**3*(k**2*(ry*ry-r**2) + (1-1j*k*r)/r**2*(-3*ry*ry+r**2))
+    A_ij[1,2] = np.exp(1j*k*r)/r**3*(k**2*(ry*rz) + (1-1j*k*r)/r**2*(-3*ry*rz))
 
-    # A_ij[2,0] = A_ij[0,2]
-    # A_ij[2,1] = A_ij[1,2]
-    # A_ij[2,2] = np.exp(1j*k*r)/r**3*(k**2*(rz*rz-r**2) + (1-1j*k*r)/r**2*(-3*rz*rz+r**2))
+    A_ij[2,0] = A_ij[0,2]
+    A_ij[2,1] = A_ij[1,2]
+    A_ij[2,2] = np.exp(1j*k*r)/r**3*(k**2*(rz*rz-r**2) + (1-1j*k*r)/r**2*(-3*rz*rz+r**2))
 
     return A_ij
 
@@ -227,8 +227,7 @@ def dda_abs_cross_mie_polariz(w, Ex, Ey, Ez):
     Cabs = abs_cross_1#+abs_cross_2
     Csca = sca_cross_1#+sca_cross_2
 
-    return Cabs
-    # return abs_cross_1, abs_cross_2
+    return abs_cross_1#, abs_cross_2
 
 def plot_analytics():
     w = np.arange(.5,3,.005)/hbar_eVs
@@ -274,31 +273,53 @@ def write_numeric_power_abs():
     '''
     w = np.arange(0.5,3.0,.01)/hbar_eVs
     write_file = np.zeros((1+3*N, len(w)+8))
-    Px = np.zeros(len(w))
-    Py = np.zeros(len(w))
-    Pz = np.zeros(len(w))
-    for i in range(0,len(w)):
-        Px[i] = dda_abs_cross_mie_polariz(w=w[i], Ex=1, Ey=0, Ez=0)
-        Py[i] = dda_abs_cross_mie_polariz(w=w[i], Ex=0, Ey=1, Ez=0)
-        Pz[i] = dda_abs_cross_mie_polariz(w=w[i], Ex=0, Ey=0, Ez=1)
+    Px = np.zeros((len(w), N))
+    Py = np.zeros((len(w), N))
+    Pz = np.zeros((len(w), N))
 
-    center_of_part1 = np.array([0, 0, 0])
+    for i in range(0,len(w)):
+        # Px[i,0], Px[i,1] = dda_abs_cross_mie_polariz(w=w[i], Ex=1, Ey=0, Ez=0)
+        # Py[i,0], Py[i,1] = dda_abs_cross_mie_polariz(w=w[i], Ex=0, Ey=1, Ez=0)
+        # Pz[i,0], Pz[i,1] = dda_abs_cross_mie_polariz(w=w[i], Ex=0, Ey=0, Ez=1)
+
+        Px[i,0] = dda_abs_cross_mie_polariz(w=w[i], Ex=1, Ey=0, Ez=0)
+        Py[i,0] = dda_abs_cross_mie_polariz(w=w[i], Ex=0, Ey=1, Ez=0)
+        Pz[i,0] = dda_abs_cross_mie_polariz(w=w[i], Ex=0, Ey=0, Ez=1)
+
     orient_of_longaxis = np.array([0, 0, 1])
-    semi_major_axis = zrad1
-    semi_minor_axis = yrad1
+    # semi_major_axis = np.array([zrad1, zrad2])
+    # semi_minor_axis = np.array([yrad1, yrad2])
+    semi_major_axis = np.array([zrad1])
+    semi_minor_axis = np.array([yrad1])
 
     write_file[0,8:] = w*hbar_eVs
     for i in range(0, N):
-        write_file[i+1, 0:3] = center_of_part1
-        write_file[i+1, 3:6] = orient_of_longaxis
-        write_file[i+1, 6] = semi_major_axis
-        write_file[i+1, 7] = semi_minor_axis
+        write_file[3*i+1, 0:3] = centers[3*i : 3*(i+1), 0]
+        write_file[3*i+2, 0:3] = centers[3*i : 3*(i+1), 0]
+        write_file[3*i+3, 0:3] = centers[3*i : 3*(i+1), 0]
+    
+        write_file[3*i+1, 3:6] = orient_of_longaxis
+        write_file[3*i+2, 3:6] = orient_of_longaxis
+        write_file[3*i+3, 3:6] = orient_of_longaxis
 
-        write_file[3*i+1, 8:] = Px
-        write_file[3*i+2, 8:] = Py
-        write_file[3*i+3, 8:] = Pz
-    print(Pz)
-    name = str('prolate_')+str(int(xrad1*10**7))+str('nm_')+str(int(yrad1*10**7))+str('nm_')+str(int(zrad1*10**7))+str('nm')
+        write_file[3*i+1, 6] = semi_major_axis[i]
+        write_file[3*i+2, 6] = semi_major_axis[i]
+        write_file[3*i+3, 6] = semi_major_axis[i]
+
+        write_file[3*i+1, 7] = semi_minor_axis[i]
+        write_file[3*i+2, 7] = semi_minor_axis[i]
+        write_file[3*i+3, 7] = semi_minor_axis[i]
+
+        write_file[3*i+1, 8:] = Px[:,i]
+        write_file[3*i+2, 8:] = Py[:,i]
+        write_file[3*i+3, 8:] = Pz[:,i]
+
+    name = str('prolate_')+str(int(xrad1*10**7))+str('_')+str(int(yrad1*10**7))+str('_')+str(int(zrad1*10**7))
     np.savetxt(str('datafiles_for_learning/')+str(name)+str('.txt'), write_file, fmt="%2.5E")
 
 write_numeric_power_abs()
+
+
+
+
+
