@@ -1,9 +1,12 @@
-## Tight binding code
+## Coupled Oscillators
 
+# Normal Mode Solver
 tight_binding.py -- calculates the normal modes of a coupled oscillator system
-compare_cross-sections.py -- compares the normal mode energies to physical observables.
-inputs.txt -- provides the inputs to tight_binding.py. Make sure it's formatted identical to this sample
 
-To see an explanation on how the physics work: https://www.overleaf.com/read/gbqmdxsggspw. 
+This code calculates the normal modes, with the input parameters specified in an input text file. Currently, the code will plot the two normal modes of a coupled nanosphere dimer. 
+
+
+
+
 
 
