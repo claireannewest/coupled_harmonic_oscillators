@@ -49,7 +49,7 @@ class CoupledOscillators:
                 v = 4./3*np.pi*(self.radii[row])**3 # [cm^3], volume of sphere
                 Li = 1./3
                 w0_qs = np.sqrt(wp**2/(eps_inf+2*eps_b)) # [eV], quasi-static plasmon resonance frequency 
-                m_qs = 4.*np.pi*e**2/(v*(w0_qs/hbar_eVs)**2)*(eps_inf + 2*eps_b)/(3*eps_b)
+                m_qs = 4.*np.pi*e**2/(3*v*(w0_qs/hbar_eVs)**2)*(eps_inf + 2*eps_b)/(3*eps_b)
                 # Long wavelength approximation (https://www.osapublishing.org/josab/viewmedia.cfm?uri=josab-26-3-517&seq=0)
                 m[row] =  m_qs + D*e**2/(li*c**2) # [g], mass with radiation damping
                 w0[row] = w0_qs*np.sqrt(m_qs/m[row]) # [eV], plasmon resonance frequency with radiation damping
