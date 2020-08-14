@@ -1,8 +1,5 @@
 import numpy as np
 import matplotlib.pyplot as plt
-# import yaml
-from scipy.linalg import null_space
-from sympy import *
 
 eps_b = 1.**2 # dielectric constant of background, (eps_b = 1.0 is vacuum) [unitless]
 c = 2.998E+10 # speed of light [cm/s]
@@ -20,7 +17,7 @@ class CoupledOscillators:
         num_dip -- number of dipoles per particle (normally two)
         centers -- particle centers [cm]
         orientaitons -- unit vectors defining each dipole [unitless]
-        radii -- radii of the oscillators [cm]
+        radii -- radii of the particles [cm]
         kind -- which kind of dipole (0 = sphere, 1 = long axis prolate spheroid, 2 = short axis prolate spheroid)
         optional_semiaxis -- define the semi-axis of prolate sphereiod if it isn't defined in data file
         """
@@ -31,7 +28,6 @@ class CoupledOscillators:
         self.unit_vecs = orientations
         self.kind = kind
         self.optional_semiaxis = optional_semiaxis
-        # self.drive = drive
         self.w0, self.m, self.gamNR = self.dipole_parameters()
         self.mat_size = int(self.num_dip*self.num_part)
             
@@ -54,6 +50,10 @@ class CoupledOscillators:
                 Li = 1./3
                 w0_qs = np.sqrt(wp**2/(eps_inf+2*eps_b)) # [eV], quasi-static plasmon resonance frequency 
                 m_qs = 4.*np.pi*e**2/(v*(w0_qs/hbar_eVs)**2)*(eps_inf + 2*eps_b)/(3*eps_b)
+                # Long wavelength approximation (https://www.osapublishing.org/josab/viewmedia.cfm?uri=josab-26-3-517&seq=0)
+                m[row] =  m_qs + D*e**2/(li*c**2) # [g], mass with radiation damping
+                w0[row] = w0_qs*np.sqrt(m_qs/m[row]) # [eV], plasmon resonance frequency with radiation damping
+                gamNR[row] = gamNR_qs * m_qs/m[row] # [eV], adjusted nonradiative damping 
 
             if self.kind[row] == 1: # prolate spheroid
                 cs = self.radii[row] # [cm], semi-major axis of prolate sphereiod 
@@ -66,32 +66,26 @@ class CoupledOscillators:
                     a = self.radii[idx] # [cm], semi-minor axis of prolate spheriod 
                 if self.optional_semiaxis != '': 
                     a = self.optional_semiaxis # [cm], semi-minor axis of prolate spheriod 
-                es = (cs**2 - a**2)/cs**2 # [unitless]
-                Lz = (1-es**2)/es**2*(-1+1./(2*es)*np.log((1+es)/(1-es))) # [unitless]
-                Ly = (1-Lz)/2 # [unitless]  
-                D = 3./4*((1+es**2)/(1-es**2)*Lz + 1) # [unitless]
+                es = np.sqrt((cs**2 - a**2)/cs**2) # [unitless]
                 V = 4./3*np.pi*a**2*cs # [cm^3]
+                Lz = (1-es**2)/es**2*(-1+1/(2*es)*np.log((1+es)/(1-es))) # [unitless]
+                Dz = 3./4*((1+es**2)/(1-es**2)*Lz + 1) # [unitless]
+                Ly = (1-Lz)/2 # [unitless]  
+                Dy = a/(2*cs)*( 3/es*np.arctanh(es) - Dz) 
                 # for semi-major axis
-                li = cs; Li = Lz 
+                lE = cs; Li = Lz; D = Dz
                 w0_qs = np.sqrt(wp**2/((eps_inf-1)+1/Li)) # [eV], quasi-static plasmon resonance frequency 
-
                 m_qs= 4*np.pi*e**2*((eps_inf-1)+1/Li)/((w0_qs/hbar_eVs)**2*V/Li**2) # [g] 
-                m[row] = m_qs + D*e**2/(li*c**2) # [g]
+                m[row] = m_qs + Dz*e**2/(lE*c**2) # [g]
                 w0[row] = (w0_qs)*np.sqrt(m_qs/m[row]) # [eV]
                 gamNR[row] = 0.07*(m_qs/m[row]) # [eV]
                 # for semi-minor axis 
-                if self.optional_semiaxis == '':
-                    li = a
-                    Li = Ly
-                    m_qs= 4*np.pi*e**2*((eps_inf-1)+1/Li)/((w0_qs/hbar_eVs)**2*V/Li**2) # g 
-                    m[idx] = m_qs + D*e**2/(li*c**2) # g (charge and speed of light)
-                    w0[idx] = (w0_qs)*np.sqrt(m_qs/m[idx]) # 1/s
-                    gamNR[idx] = 0.07*(m_qs/m[idx]) 
-            # Long wavelength approximation (https://www.osapublishing.org/josab/viewmedia.cfm?uri=josab-26-3-517&seq=0)
-            m[row] =  m_qs + D*e**2/(li*c**2) # [g], mass with radiation damping
-            w0[row] = w0_qs*np.sqrt(m_qs/m[row]) # [eV], plasmon resonance frequency with radiation damping
-            gamNR[row] = gamNR_qs * m_qs/m[row] # [eV], adjusted nonradiative damping 
-
+                lE = a; Li = Ly; D = Dy
+                w0_qs = np.sqrt(wp**2/((eps_inf-1)+1/Li)) # [eV], quasi-static plasmon resonance frequency 
+                m_qs= 4*np.pi*e**2*((eps_inf-1)+1/Li)/((w0_qs/hbar_eVs)**2*V/Li**2) # g 
+                m[idx] = m_qs + Dy*e**2/(lE*c**2) # g (charge and speed of light)
+                w0[idx] = (w0_qs)*np.sqrt(m_qs/m[idx]) # 1/s
+                gamNR[idx] = 0.07*(m_qs/m[idx]) 
         return w0, m, gamNR # [eV], [g], [eV]
     
     def coupling(self, dip_i, dip_j, k): 
@@ -154,9 +148,7 @@ class CoupledOscillators:
             eigvec_hist = np.zeros((self.mat_size, 2))
             count = 0
             while (np.abs((np.real(eigval_hist[0]) - np.real(eigval_hist[1])))  > 10**(-prec)) or \
-                  (np.abs((np.imag(eigval_hist[0]) - np.imag(eigval_hist[1]))) > 10**(-prec)):# or \
-      #             (np.abs((np.real(eigvec_hist[0,0]) - np.real(eigvec_hist[0,1])))) > 10**(-prec) or \
-				  # (np.abs((np.imag(eigvec_hist[1,0]) - np.imag(eigvec_hist[1,1])))) > 10**(-prec) :
+                  (np.abs((np.imag(eigval_hist[0]) - np.imag(eigval_hist[1]))) > 10**(-prec)):
                 w_guess = eigval_hist[0]
                 if count > 1000: 
                     denom = ( eigval_hist[2] - eigval_hist[1] ) - ( eigval_hist[1] - eigval_hist[0] )
@@ -173,29 +165,23 @@ class CoupledOscillators:
                 eigval_hist = np.append(this_val, eigval_hist)
                 eigvec_hist = np.column_stack((this_vec, eigvec_hist))
                 count = count + 1      
-                print(mode)#, this_val, count, this_vec)
             final_eigvals[mode] = eigval_hist[0]
             final_eigvecs[:,mode] = eigvec_hist[:,0]
         return final_eigvals, final_eigvecs  
     
     def see_vectors(self):
         """Plot the convereged eigenvectors."""
-        final_eigvals, final_eigvecs = self.iterate()
         dip_ycoords = self.centers[:,0]
         dip_zcoords = self.centers[:,1]  
-        plt.figure(1, figsize=[5,3])
+        plt.figure(1, figsize=[6,1.5])
         for mode in range(0,self.mat_size):
             w = final_eigvals[mode] # [eV]
-            # print(w)
-            # print(np.abs(w))
             v = final_eigvecs[:,mode] # [unitless]
-            # print(v)
-			#######
             v = np.real(final_eigvecs[:,mode]) # [unitless]
             plt.subplot(1,self.mat_size,mode+1)
             ax = plt.gca()
             ax.set_aspect('equal', adjustable='box')
-            plt.title('%.2f' % (np.real(w)) + ' + i%.2f eV' % (np.imag(w)), fontsize=10)
+            plt.title('%.2f' % (np.real(w)) + ' eV', fontsize=10)
             p = v[...,np.newaxis]*self.unit_vecs
             if self.num_dip == 1: p_perpart = p
             else: p_perpart = p[:int(self.mat_size/self.num_dip),:] + p[int(self.mat_size/self.num_dip):,:] 
@@ -209,20 +195,16 @@ class CoupledOscillators:
                 minshaft=4., 
                 minlength=.01
                 )
-            plt.xlim([ymin, ymax])
-            plt.ylim([zmin, zmax])
-            # plt.axis('equal')
             plt.yticks([]); plt.xticks([])
             plt.scatter(dip_ycoords, dip_zcoords,c='blue',s=20)
+            plt.xlim([ymin, ymax])
+            plt.ylim([zmin, zmax])
+            plt.subplots_adjust(top=.83)
 
-data = np.loadtxt('dimer.txt',skiprows=1)
-numparts = 2 # number of nanoparticles
-dips_per_part = 1 # number of dipoles per particle 
-optional_semixis = '' # if prolate spherioid with only long axis dipole, fill in the semi-minor axis length here
-
-dimer = CoupledOscillators(numparts, dips_per_part, data[:,0:2], data[:,2:4], data[:,4], data[:,5], optional_semixis)
-
-dimer.see_vectors()
+data = np.loadtxt('trimer_params.txt',skiprows=0)
+coupled_dip = CoupledOscillators(3, 2, data[:,0:2], data[:,2:4], data[:,4], data[:,5], '')
+final_eigvals, final_eigvecs = coupled_dip.iterate()
+coupled_dip.see_vectors()
 plt.show()
 
 
