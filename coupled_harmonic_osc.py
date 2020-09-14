@@ -1,15 +1,13 @@
 import numpy as np
 import matplotlib.pyplot as plt
 
-eps_b = 1.**2 # dielectric constant of background, (eps_b = 1.0 is vacuum) [unitless]
 c = 2.998E+10 # speed of light [cm/s]
 hbar_eVs = 6.58212E-16 # Planck's constant [eV*s]
 hbar_cgs = 1.0545716E-27 # Planck's constant [cm^2*g/s]
 e = 4.80326E-10 # elementary charge, [statC, g^1/2 cm^3/2 s^-1]
-prec = 10 # convergence condition for iteration
 
 class CoupledOscillators:
-    def __init__(self, num_part, num_dip, centers, orientations, radii, kind, optional_semiaxis): 
+    def __init__(self, constants, num_part, num_dip, centers, orientations, radii, kind, optional_semiaxis): 
         """Defines the different system parameters.
         
         Keyword arguments:
@@ -21,6 +19,7 @@ class CoupledOscillators:
         kind -- which kind of dipole (0 = sphere, 1 = long axis prolate spheroid, 2 = short axis prolate spheroid)
         optional_semiaxis -- define the semi-axis of prolate sphereiod if it isn't defined in data file
         """
+        self.constants = constants
         self.num_part = num_part
         self.num_dip = num_dip 
         self.radii = radii
@@ -29,20 +28,17 @@ class CoupledOscillators:
         self.kind = kind
         self.optional_semiaxis = optional_semiaxis
         self.w0, self.m, self.gamNR = self.dipole_parameters()
-        self.mat_size = int(self.num_dip*self.num_part)
-            
+
     def dipole_parameters(self):
         """Sets the physical dipole parameters. This is assuming the dipoles represent spheres or prolate spheroids.
         """
-        w0 = np.zeros(self.num_dip*self.num_part) # initiaize array for resonance frequency for each dipole
-        m = np.zeros(self.num_dip*self.num_part) # initiaize array for effective for each dipole
-        gamNR = np.zeros(self.num_dip*self.num_part) # initiaize array for nonradiative damping for each dipole
-        # The following three parameters are fits to gold JC data. 
-        # See the included script, "fit_jc_to_drude.py" to learn more.
-        wp = 9. # [eV], bulk plasma frequency 
-        eps_inf = 9.7 # [unitless], static dielectric response of ionic background 
-        gamNR_qs = 0.073 # [eV]
-        for row in range(0,self.num_dip*self.num_part):
+        mat_size = int(self.num_dip*self.num_part)
+        w0 = np.zeros(mat_size) # initiaize array for resonance frequency for each dipole
+        m = np.zeros(mat_size) # initiaize array for effective for each dipole
+        gamNR = np.zeros(mat_size) # initiaize array for nonradiative damping for each dipole
+        wp, eps_inf, gamNR_qs, eps_b = self.constants
+        print('eps_b', eps_b)
+        for row in range(0, mat_size):
             if self.kind[row] == 0: # sphere
                 D = 1.
                 li = self.radii[row]
@@ -74,15 +70,15 @@ class CoupledOscillators:
                 Dy = a/(2*cs)*( 3/es*np.arctanh(es) - Dz) 
                 # for semi-major axis
                 lE = cs; Li = Lz; D = Dz
-                w0_qs = np.sqrt(wp**2/((eps_inf-1)+1/Li)) # [eV], quasi-static plasmon resonance frequency 
-                m_qs= 4*np.pi*e**2*((eps_inf-1)+1/Li)/((w0_qs/hbar_eVs)**2*V/Li**2) # [g] 
+                w0_qs = np.sqrt((wp**2/eps_b)/((eps_inf/eps_b-1)+1/Li)) # [eV], quasi-static plasmon resonance frequency 
+                m_qs= 4*np.pi*e**2*((eps_inf/eps_b-1)+1/Li)/((w0_qs/hbar_eVs)**2*V/Li**2) # [g] 
                 m[row] = m_qs + Dz*e**2/(lE*c**2) # [g]
                 w0[row] = (w0_qs)*np.sqrt(m_qs/m[row]) # [eV]
                 gamNR[row] = 0.07*(m_qs/m[row]) # [eV]
                 # for semi-minor axis 
                 lE = a; Li = Ly; D = Dy
-                w0_qs = np.sqrt(wp**2/((eps_inf-1)+1/Li)) # [eV], quasi-static plasmon resonance frequency 
-                m_qs= 4*np.pi*e**2*((eps_inf-1)+1/Li)/((w0_qs/hbar_eVs)**2*V/Li**2) # g 
+                w0_qs = np.sqrt((wp**2/eps_b)/((eps_inf/eps_b-1)+1/Li)) # [eV], quasi-static plasmon resonance frequency 
+                m_qs= 4*np.pi*e**2*((eps_inf/eps_b-1)+1/Li)/((w0_qs/hbar_eVs)**2*V/Li**2) # g 
                 m[idx] = m_qs + Dy*e**2/(lE*c**2) # g (charge and speed of light)
                 w0[idx] = (w0_qs)*np.sqrt(m_qs/m[idx]) # 1/s
                 gamNR[idx] = 0.07*(m_qs/m[idx]) 
@@ -98,6 +94,7 @@ class CoupledOscillators:
         dip_j -- jth dipole
         k -- wave vector [1/cm]
         """
+        wp, eps_inf, gamNR_qs, eps_b = self.constants
         k = np.real(k) # [1/cm]
         r_ij = self.centers[dip_i,:] - self.centers[dip_j,:] # [cm], distance between ith and jth dipole 
         mag_rij = np.linalg.norm(r_ij) 
@@ -112,7 +109,7 @@ class CoupledOscillators:
             nearField = ( 3.*xi_dot_nn_dot_xj - np.dot(xi_hat,xj_hat) ) / mag_rij**3 # [1/cm^3], near field coupling.
             intermedField = 1j*k*(3*xi_dot_nn_dot_xj - np.dot(xi_hat,xj_hat)) / mag_rij**2 # [1/cm^3], intermediate field coupling
             farField = k**2*(xi_dot_nn_dot_xj - np.dot(xi_hat,xj_hat)) / mag_rij # [1/cm^3], far field coupling
-            g = e**2 * hbar_eVs**2 / eps_b * ( nearField  - intermedField - farField ) * np.exp(1j*k*mag_rij) # [g eV^2], total radiative coupling
+            g = e**2 * hbar_eVs**2 * ( nearField  - intermedField - farField ) * np.exp(1j*k*mag_rij) # [g eV^2], total radiative coupling
         return g # [g eV^2]
     
     def make_matrix(self, k):
@@ -121,12 +118,14 @@ class CoupledOscillators:
         Keywords: 
         k -- wave vector [1/cm]
         """
-        matrix = np.zeros( (self.mat_size, self.mat_size) ,dtype=complex) 
+        wp, eps_inf, gamNR_qs, eps_b = self.constants
+        mat_size = int(self.num_dip*self.num_part)
+        matrix = np.zeros( (mat_size, mat_size) ,dtype=complex) 
         w_guess = k*c/np.sqrt(eps_b)*hbar_eVs # [eV], left-hand size w 
         gam = self.gamNR + (np.real(w_guess))**2*(2.0*e**2)/(3.0*self.m*c**3)/hbar_eVs # [eV], radiative damping for dipole i
-        matrix[( np.arange(self.mat_size), np.arange(self.mat_size) )] = self.w0**2# - 1j*gam*w_guess # [eV^2], on-diagonal matrix elements
-        for dip_i in range(0 , self.mat_size): 
-            for dip_j in range(0, self.mat_size): 
+        matrix[( np.arange(mat_size), np.arange(mat_size) )] = self.w0**2# - 1j*gam*w_guess # [eV^2], on-diagonal matrix elements
+        for dip_i in range(0 , mat_size): 
+            for dip_j in range(0, mat_size): 
                     if dip_i != dip_j:
                         matrix[ dip_i, dip_j] = -self.coupling(dip_i=dip_i, dip_j=dip_j, k=k)/self.m[dip_i] # [eV^2], off-diagonal matrix elements
         eigval, eigvec = np.linalg.eig(matrix)
@@ -140,12 +139,15 @@ class CoupledOscillators:
         the while loop surpasses 100 trials for a single eigenvalue/eigenvector set, the selection of the left-hand
         side w is modified to take into account previous trials. 
         """
-        final_eigvals = np.zeros(self.mat_size,dtype=complex) 
-        final_eigvecs = np.zeros( (self.mat_size, self.mat_size), dtype=complex) 
+        wp, eps_inf, gamNR_qs, eps_b = self.constants
+        mat_size = int(self.num_dip*self.num_part)
+        prec = 10 # convergence condition for iteration
+        final_eigvals = np.zeros(mat_size,dtype=complex) 
+        final_eigvecs = np.zeros( (mat_size, mat_size), dtype=complex) 
         w_init = -1j*self.gamNR/2. + np.sqrt(-self.gamNR**2/4.+self.w0**2) # [eV], Initial guess of left-hand size w. This is the result for an isolated nonradiative dipole.
-        for mode in range(0,self.mat_size): # Converge each mode individually.
+        for mode in range(0,mat_size): # Converge each mode individually.
             eigval_hist = np.array([w_init[mode], w_init[mode]*1.1],dtype=complex) 
-            eigvec_hist = np.zeros((self.mat_size, 2))
+            eigvec_hist = np.zeros((mat_size, 2))
             count = 0
             while (np.abs((np.real(eigval_hist[0]) - np.real(eigval_hist[1])))  > 10**(-prec)) or \
                   (np.abs((np.imag(eigval_hist[0]) - np.imag(eigval_hist[1]))) > 10**(-prec)):
@@ -169,25 +171,26 @@ class CoupledOscillators:
             final_eigvecs[:,mode] = eigvec_hist[:,0]
         return final_eigvals, final_eigvecs  
     
-    def see_vectors(self):
+    def see_vectors(self, final_eigvals, final_eigvecs):
         """Plot the convereged eigenvectors."""
         dip_ycoords = self.centers[:,0]
-        dip_zcoords = self.centers[:,1]  
+        dip_zcoords = self.centers[:,1] 
+        mat_size = int(self.num_dip*self.num_part) 
         plt.figure(1, figsize=[6,1.5])
-        for mode in range(0,self.mat_size):
+        for mode in range(0, mat_size):
             w = final_eigvals[mode] # [eV]
             v = final_eigvecs[:,mode] # [unitless]
             v = np.real(final_eigvecs[:,mode]) # [unitless]
-            plt.subplot(1,self.mat_size,mode+1)
+            plt.subplot(1,mat_size,mode+1)
             ax = plt.gca()
             ax.set_aspect('equal', adjustable='box')
             plt.title('%.2f' % (np.real(w)) + ' eV', fontsize=10)
             p = v[...,np.newaxis]*self.unit_vecs
             if self.num_dip == 1: p_perpart = p
-            else: p_perpart = p[:int(self.mat_size/self.num_dip),:] + p[int(self.mat_size/self.num_dip):,:] 
+            else: p_perpart = p[:int(mat_size/self.num_dip),:] + p[int(mat_size/self.num_dip):,:] 
             ymin = min(dip_ycoords)-100E-7; ymax = max(dip_ycoords)+100E-7
             zmin = min(dip_zcoords)-100E-7; zmax = max(dip_zcoords)+100E-7
-            plt.quiver(dip_ycoords[:int(self.mat_size/self.num_dip)], dip_zcoords[:int(self.mat_size/self.num_dip)], p_perpart[:,0], p_perpart[:,1], pivot='mid', 
+            plt.quiver(dip_ycoords[:int(mat_size/self.num_dip)], dip_zcoords[:int(mat_size/self.num_dip)], p_perpart[:,0], p_perpart[:,1], pivot='mid', 
                 width=.5, #shaft width in arrow units 
                 scale=1., 
                 headlength=5,
@@ -200,11 +203,4 @@ class CoupledOscillators:
             plt.xlim([ymin, ymax])
             plt.ylim([zmin, zmax])
             plt.subplots_adjust(top=.83)
-
-data = np.loadtxt('trimer_params.txt',skiprows=0)
-coupled_dip = CoupledOscillators(3, 2, data[:,0:2], data[:,2:4], data[:,4], data[:,5], '')
-final_eigvals, final_eigvecs = coupled_dip.iterate()
-coupled_dip.see_vectors()
-plt.show()
-
 
