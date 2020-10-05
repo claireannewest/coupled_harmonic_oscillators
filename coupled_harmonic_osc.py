@@ -37,7 +37,7 @@ class CoupledOscillators:
         m = np.zeros(mat_size) # initiaize array for effective for each dipole
         gamNR = np.zeros(mat_size) # initiaize array for nonradiative damping for each dipole
         wp, eps_inf, gamNR_qs, eps_b = self.constants
-        print('eps_b', eps_b)
+        n = np.sqrt(eps_b)
         for row in range(0, mat_size):
             if self.kind[row] == 0: # sphere
                 D = 1.
@@ -72,14 +72,14 @@ class CoupledOscillators:
                 lE = cs; Li = Lz; D = Dz
                 w0_qs = np.sqrt((wp**2/eps_b)/((eps_inf/eps_b-1)+1/Li)) # [eV], quasi-static plasmon resonance frequency 
                 m_qs= 4*np.pi*e**2*((eps_inf/eps_b-1)+1/Li)/((w0_qs/hbar_eVs)**2*V/Li**2) # [g] 
-                m[row] = m_qs + Dz*e**2/(lE*c**2) # [g]
+                m[row] = m_qs + n**2*Dz*e**2/(lE*c**2) # [g]
                 w0[row] = (w0_qs)*np.sqrt(m_qs/m[row]) # [eV]
                 gamNR[row] = 0.07*(m_qs/m[row]) # [eV]
                 # for semi-minor axis 
                 lE = a; Li = Ly; D = Dy
                 w0_qs = np.sqrt((wp**2/eps_b)/((eps_inf/eps_b-1)+1/Li)) # [eV], quasi-static plasmon resonance frequency 
                 m_qs= 4*np.pi*e**2*((eps_inf/eps_b-1)+1/Li)/((w0_qs/hbar_eVs)**2*V/Li**2) # g 
-                m[idx] = m_qs + Dy*e**2/(lE*c**2) # g (charge and speed of light)
+                m[idx] = m_qs + n**2*Dy*e**2/(lE*c**2) # g (charge and speed of light)
                 w0[idx] = (w0_qs)*np.sqrt(m_qs/m[idx]) # 1/s
                 gamNR[idx] = 0.07*(m_qs/m[idx]) 
         return w0, m, gamNR # [eV], [g], [eV]
@@ -95,7 +95,7 @@ class CoupledOscillators:
         k -- wave vector [1/cm]
         """
         wp, eps_inf, gamNR_qs, eps_b = self.constants
-        k = np.real(k) # [1/cm]
+        # k = np.real(k) # [1/cm]
         r_ij = self.centers[dip_i,:] - self.centers[dip_j,:] # [cm], distance between ith and jth dipole 
         mag_rij = np.linalg.norm(r_ij) 
         if mag_rij == 0: 
@@ -107,7 +107,7 @@ class CoupledOscillators:
             xj_hat = self.unit_vecs[dip_j] # [unitless], unit vector of the jth dipole
             xi_dot_nn_dot_xj = np.dot(xi_hat, nhat_ij)*np.dot(nhat_ij, xj_hat) # [unitless]
             nearField = ( 3.*xi_dot_nn_dot_xj - np.dot(xi_hat,xj_hat) ) / mag_rij**3 # [1/cm^3], near field coupling.
-            intermedField = 1j*k*(3*xi_dot_nn_dot_xj - np.dot(xi_hat,xj_hat)) / mag_rij**2 # [1/cm^3], intermediate field coupling
+            intermedField = -1j*k*(3*xi_dot_nn_dot_xj - np.dot(xi_hat,xj_hat)) / mag_rij**2 # [1/cm^3], intermediate field coupling
             farField = k**2*(xi_dot_nn_dot_xj - np.dot(xi_hat,xj_hat)) / mag_rij # [1/cm^3], far field coupling
             g = e**2 * hbar_eVs**2 * ( nearField  - intermedField - farField ) * np.exp(1j*k*mag_rij) # [g eV^2], total radiative coupling
         return g # [g eV^2]
@@ -119,17 +119,19 @@ class CoupledOscillators:
         k -- wave vector [1/cm]
         """
         wp, eps_inf, gamNR_qs, eps_b = self.constants
+        n = np.sqrt(eps_b)
         mat_size = int(self.num_dip*self.num_part)
         matrix = np.zeros( (mat_size, mat_size) ,dtype=complex) 
         w_guess = k*c/np.sqrt(eps_b)*hbar_eVs # [eV], left-hand size w 
-        gam = self.gamNR + (np.real(w_guess))**2*(2.0*e**2)/(3.0*self.m*c**3)/hbar_eVs # [eV], radiative damping for dipole i
-        matrix[( np.arange(mat_size), np.arange(mat_size) )] = self.w0**2# - 1j*gam*w_guess # [eV^2], on-diagonal matrix elements
+        gam = self.gamNR + n**3*w_guess**2*(2.0*e**2)/(3.0*self.m*c**3)/hbar_eVs # [eV], radiative damping for dipole i
+        matrix[( np.arange(mat_size), np.arange(mat_size) )] = self.w0**2 - 1j*gam*w_guess # [eV^2], on-diagonal matrix elements
         for dip_i in range(0 , mat_size): 
             for dip_j in range(0, mat_size): 
                     if dip_i != dip_j:
                         matrix[ dip_i, dip_j] = -self.coupling(dip_i=dip_i, dip_j=dip_j, k=k)/self.m[dip_i] # [eV^2], off-diagonal matrix elements
         eigval, eigvec = np.linalg.eig(matrix)
         return eigval, eigvec, matrix #[eV^2], [unitless], [eV^2]
+
 
     def iterate(self):
         """Solves A(w)*x = w^2*x for w and x. This is done by guessing the first left-side w, calculating
@@ -149,19 +151,39 @@ class CoupledOscillators:
             eigval_hist = np.array([w_init[mode], w_init[mode]*1.1],dtype=complex) 
             eigvec_hist = np.zeros((mat_size, 2))
             count = 0
+            blow_up_count = 0
             while (np.abs((np.real(eigval_hist[0]) - np.real(eigval_hist[1])))  > 10**(-prec)) or \
-                  (np.abs((np.imag(eigval_hist[0]) - np.imag(eigval_hist[1]))) > 10**(-prec)):
+                  (np.abs((np.imag(eigval_hist[0]) - np.imag(eigval_hist[1]))) > 10**(-prec)) or \
+                  np.all((np.abs((np.real(eigvec_hist[:,0]) - np.real(eigvec_hist[:,1]))) > 10**(-prec))) or \
+                  np.all((np.abs((np.imag(eigvec_hist[:,0]) - np.imag(eigvec_hist[:,1]))) > 10**(-prec))):
                 w_guess = eigval_hist[0]
-                if count > 1000: 
+                if count > 100: 
                     denom = ( eigval_hist[2] - eigval_hist[1] ) - ( eigval_hist[1] - eigval_hist[0] )
                     w_guess = eigval_hist[2] - ( eigval_hist[2] - eigval_hist[1] )**2 / denom 
                 k = w_guess/hbar_eVs*np.sqrt(eps_b)/c # [1/cm]
+
+                if w_guess > 10: 
+                    # if you're starting to blow up (i.e. w > 10 eVs), then give up and start over
+                    # if you've entereted this loop more than once, you'll need new guesses
+                    w0, m, gamNR = self.dipole_parameters()
+                    ## pick a_rand, b_rand, c_rand to be a random number between 0.8 - 1.2
+                    import random
+                    a_rand = random.uniform(0.8, 1.2)
+                    b_rand = random.uniform(0.8, 1.2)
+                    c_rand = random.uniform(0.8, 1.2)
+
+                    eigval_hist = np.array([w0[mode]*a_rand, w0[mode]*b_rand, w0[mode]*c_rand],dtype=complex) 
+                    eigvec_hist = np.zeros((mat_size, 3))
+                    continue
+
+
                 val, vec, H = self.make_matrix(k=k)
                 amp = np.sqrt(np.abs(val))
                 phi = np.arctan2(np.imag(val), np.real(val))
                 energy = amp*(np.cos(phi/2.)+1j*np.sin(phi/2.))
-                post_sort_val = energy[val.argsort()] # sort the evals and evecs so that we are comparing the same eval/evec as the previous trial.
-                post_sort_vec = vec[:,val.argsort()]
+
+                post_sort_val = energy[energy.argsort()] # sort the evals and evecs so that we are comparing the same eval/evec as the previous trial.
+                post_sort_vec = vec[:,energy.argsort()]
                 this_val = post_sort_val[mode] # [eV]
                 this_vec = post_sort_vec[:,mode] # [unitless]
                 eigval_hist = np.append(this_val, eigval_hist)
@@ -179,13 +201,25 @@ class CoupledOscillators:
         plt.figure(1, figsize=[6,1.5])
         for mode in range(0, mat_size):
             w = final_eigvals[mode] # [eV]
-            v = final_eigvecs[:,mode] # [unitless]
+            energy = np.real(w)
+            # wamp = np.abs(w)
+            # phi = np.arctan2(np.imag(w), np.real(w))
+            # energy = wamp#*(np.cos(phi)+1j*np.sin(phi))
+
+            # #####
+            # v = final_eigvecs[:,mode] # [unitless]
+            # phi = np.arctan2(np.imag(v), np.real(v))
+            # # print('phi = ', phi)
+
+            # vamp = np.abs(v)
+            # vector_mag = np.real(vamp*(np.cos(phi)+1j*np.sin(phi)))
             v = np.real(final_eigvecs[:,mode]) # [unitless]
+            vector_mag = v
             plt.subplot(1,mat_size,mode+1)
             ax = plt.gca()
             ax.set_aspect('equal', adjustable='box')
-            plt.title('%.2f' % (np.real(w)) + ' eV', fontsize=10)
-            p = v[...,np.newaxis]*self.unit_vecs
+            plt.title('%.2f' % energy + ' eV', fontsize=10)
+            p = vector_mag[...,np.newaxis]*self.unit_vecs
             if self.num_dip == 1: p_perpart = p
             else: p_perpart = p[:int(mat_size/self.num_dip),:] + p[int(mat_size/self.num_dip):,:] 
             ymin = min(dip_ycoords)-100E-7; ymax = max(dip_ycoords)+100E-7
