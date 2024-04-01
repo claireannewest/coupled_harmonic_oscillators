@@ -1,13 +1,7 @@
 import numpy as np
-import matplotlib.pyplot as plt
-
-c = 2.998E+10 # speed of light [cm/s]
-hbar_eVs = 6.58212E-16 # Planck's constant [eV*s]
-hbar_cgs = 1.0545716E-27 # Planck's constant [cm^2*g/s]
-e = 4.80326E-10 # elementary charge, [statC, g^1/2 cm^3/2 s^-1]
 
 class CoupledOscillators:
-    def __init__(self, constants, num_part, num_dip, centers, orientations, radii, kind, optional_semiaxis): 
+    def __init__(self, constants, num_part, num_dip, centers, orientations, radii, kind, **optional_semiaxis):
         """Defines the different system parameters.
         
         Keyword arguments:
@@ -19,7 +13,7 @@ class CoupledOscillators:
         kind -- which kind of dipole (0 = sphere, 1 = long axis prolate spheroid, 2 = short axis prolate spheroid)
         optional_semiaxis -- define the semi-axis of prolate sphereiod if it isn't defined in data file
         """
-        self.constants = constants
+        self.c, self.hbar_eVs, self.e, self.wp, self.eps_inf, self.gamNR_qs, self.eps_b = constants
         self.num_part = num_part
         self.num_dip = num_dip 
         self.radii = radii
@@ -27,7 +21,6 @@ class CoupledOscillators:
         self.unit_vecs = orientations
         self.kind = kind
         self.optional_semiaxis = optional_semiaxis
-        self.w0, self.m, self.gamNR = self.dipole_parameters()
 
     def dipole_parameters(self):
         """Sets the physical dipole parameters. This is assuming the dipoles represent spheres or prolate spheroids.
@@ -36,20 +29,19 @@ class CoupledOscillators:
         w0 = np.zeros(mat_size) # initiaize array for resonance frequency for each dipole
         m = np.zeros(mat_size) # initiaize array for effective for each dipole
         gamNR = np.zeros(mat_size) # initiaize array for nonradiative damping for each dipole
-        wp, eps_inf, gamNR_qs, eps_b = self.constants
-        n = np.sqrt(eps_b)
+        n = np.sqrt(self.eps_b)
         for row in range(0, mat_size):
             if self.kind[row] == 0: # sphere
                 D = 1.
                 li = self.radii[row]
                 v = 4./3*np.pi*(self.radii[row])**3 # [cm^3], volume of sphere
                 Li = 1./3
-                w0_qs = np.sqrt(wp**2/(eps_inf+2*eps_b)) # [eV], quasi-static plasmon resonance frequency 
-                m_qs = 4.*np.pi*e**2/(3*v*(w0_qs/hbar_eVs)**2)*(eps_inf + 2*eps_b)/(3*eps_b)
+                w0_qs = np.sqrt(self.wp**2/(self.eps_inf+2*self.eps_b)) # [eV], quasi-static plasmon resonance frequency
+                m_qs = 4.*np.pi*self.e**2/(3*v*(w0_qs/self.hbar_eVs)**2)*(self.eps_inf + 2*self.eps_b)/(3*self.eps_b)
                 # Long wavelength approximation (https://www.osapublishing.org/josab/viewmedia.cfm?uri=josab-26-3-517&seq=0)
-                m[row] =  m_qs + D*e**2/(li*c**2) # [g], mass with radiation damping
+                m[row] =  m_qs + D*self.e**2/(li*self.c**2) # [g], mass with radiation damping
                 w0[row] = w0_qs*np.sqrt(m_qs/m[row]) # [eV], plasmon resonance frequency with radiation damping
-                gamNR[row] = gamNR_qs * m_qs/m[row] # [eV], adjusted nonradiative damping 
+                gamNR[row] = self.gamNR_qs * m_qs/m[row] # [eV], adjusted nonradiative damping
 
             if self.kind[row] == 1: # prolate spheroid
                 cs = self.radii[row] # [cm], semi-major axis of prolate sphereiod 
@@ -84,6 +76,49 @@ class CoupledOscillators:
                 gamNR[idx] = 0.07*(m_qs/m[idx]) 
         return w0, m, gamNR # [eV], [g], [eV]
     
+    def gamma(self, w):
+        w0, m, gamNR = self.dipole_parameters()
+        n = np.sqrt(self.eps_b)
+        gam_rad = n**3 * w**2 * (2.0*self.e**2) / (3.0*m*self.c**3)/self.hbar_eVs
+        return gamNR, gam_rad
+
+    def alpha(self, w):
+        w0, m, gamNR = self.dipole_parameters()
+        gamTot = self.gamma(w)[0] + self.gamma(w)[1]
+        return self.e**2 / m * self.hbar_eVs**2 / (-w**2 - 1j * gamTot * w + w0**2)
+
+    def cross_sections(self, w):
+        w0, m, gamNR = self.dipole_parameters()
+        gamNR, gamR = self.gamma(w)
+        gamTot = gamNR + gamR
+        abs_cross = 4.*np.pi*w/self.c*(gamNR/gamTot)*np.imag(self.alpha(w))
+        sca_cross = 4.*np.pi*w/self.c*(gamR/gamTot)*np.imag(self.alpha(w))
+        ext_cross = 4.*np.pi*w/self.c*np.imag(self.alpha(w))
+        return ext_cross, abs_cross, sca_cross
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
     def coupling(self, dip_i, dip_j, k): 
         """Calculates the off diagonal matrix elements, which is the 
         coupling between the ith and jth dipole divided by the effective 
@@ -94,7 +129,7 @@ class CoupledOscillators:
         dip_j -- jth dipole
         k -- wave vector [1/cm]
         """
-        wp, eps_inf, gamNR_qs, eps_b = self.constants
+        c, hbar_eVs, e, wp, eps_inf, gamNR_qs, eps_b = self.constants
         # k = np.real(k) # [1/cm]
         r_ij = self.centers[dip_i,:] - self.centers[dip_j,:] # [cm], distance between ith and jth dipole 
         mag_rij = np.linalg.norm(r_ij) 
@@ -118,7 +153,7 @@ class CoupledOscillators:
         Keywords: 
         k -- wave vector [1/cm]
         """
-        wp, eps_inf, gamNR_qs, eps_b = self.constants
+        c, hbar_eVs, e, wp, eps_inf, gamNR_qs, eps_b = self.constants
         n = np.sqrt(eps_b)
         mat_size = int(self.num_dip*self.num_part)
         matrix = np.zeros( (mat_size, mat_size) ,dtype=complex) 
@@ -141,7 +176,7 @@ class CoupledOscillators:
         the while loop surpasses 100 trials for a single eigenvalue/eigenvector set, the selection of the left-hand
         side w is modified to take into account previous trials. 
         """
-        wp, eps_inf, gamNR_qs, eps_b = self.constants
+        c, hbar_eVs, e, wp, eps_inf, gamNR_qs, eps_b = self.constants
         mat_size = int(self.num_dip*self.num_part)
         prec = 10 # convergence condition for iteration
         final_eigvals = np.zeros(mat_size,dtype=complex) 
