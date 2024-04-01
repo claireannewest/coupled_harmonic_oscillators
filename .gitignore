@@ -1,0 +1,10 @@
+# Codes / Jupyter #
+#####################
+.ipynb_checkpoints
+__pycache__
+
+# OS generated files #
+######################
+.DS_Store
+.DS_Store?
+._*
